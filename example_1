@@ -1,0 +1,166 @@
+module opt_data
+real(8) x(100),y(100)
+integer mpix
+endmodule
+
+
+
+subroutine Extraction(mode) ! Orders extraction from Flat data (mode=1) or Image data (mode=2)
+use images_data
+integer(2) width
+real(8) Fsum,Fw,fz,tw(5),br1(4200),br2(4200),xb(4200)
+real(8) b1(5),b2(5),s1(10),stat1(10)
+real(8) su,sv,sr1,sr2
+allocate (Flux(n_orders,n_columns))
+
+
+
+do n=1,n_orders
+   do i=1,n_columns
+      np2=positions(n,i)     !+mtt
+      if(np2 <= 0)np2=1 
+      if(n==1)then
+         np1=1
+      else
+         np1=positions(n-1,i) 
+         if(np1 <= 0)np1=1
+	  endif
+      if(n==n_orders)then
+         np3=n_rows
+      else
+         np3=positions(n+1,i)
+		 if(np3 <= 0)np3=1 
+      endif
+!find min in the left position 
+      fmx=1.e33
+      do ii=np1,np2
+	       if(mode == 1)Fw=Flat(ii,i)
+	       if(mode > 1)Fw=Image(ii,i)
+         if(Fw < fmx)then
+		    nmx=ii
+			fmx=Fw
+         endif
+      enddo
+      i1=nmx
+
+!find min in the right position
+      fmx=1.e33
+      do ii=np3,np2,-1
+	       if(mode == 1)Fw=Flat(ii,i)
+	       if(mode > 1)Fw=Image(ii,i)
+         if(Fw < fmx)then
+		    nmx=ii
+			fmx=Fw
+         endif
+      enddo
+      i2=nmx
+      Fsum=0.d0
+      if(mode == 3)then
+         i1=np2-3
+	     i2=np2+3
+      endif
+      if(i1 > 0)then
+ !if(n==1)write(303,*)i,i1,i2
+!i1=((np2-np1)/2)+np1
+!i2=((np3-np2)/2)+np2 
+        do ii=i1,i2
+	       if(mode == 1)Fw=Flat(ii,i)
+	       if(mode > 1)Fw=Image(ii,i)
+           Fsum=Fsum+Fw
+        enddo
+      endif
+
+
+	  Flux(n,i)=Fsum
+      if(Flux(n,i) < 0.d0)Flux(n,i)=0.d0
+   enddo
+enddo
+
+
+!write(*,*)'extraction end'
+end
+
+
+
+
+
+subroutine med(f,y,mp)
+real(8) f(mp),y,work(mp),kmin
+!write(*,*)'med',mp
+do k=1,mp
+   kmin=300000.d0
+   do i=1,mp
+      if(f(i) < kmin)then
+         kmin=f(i)
+         nmin=i
+      endif
+   enddo
+   work(k)=f(nmin)
+   f(nmin)=300000.d0
+enddo
+y=work(mp/2)
+end 
+
+
+subroutine R_Aver_e(nwin,n_p,yg)
+real(8) s,yg(*)
+n1=nwin
+n2=n_p-nwin
+do i=n1,n2
+    s=0.d0
+    k=0
+    do j=i-nwin+1,i+nwin-1
+        s=s+yg(j)
+        k=k+1
+    enddo
+    yg(i)=s/k
+enddo
+end subroutine R_Aver_e
+
+subroutine  grav_cent(n,x,y,grav)
+real(8) x(*),y(*),grav
+integer n
+real(8) xx,step,az,bz,ycn
+real(8) b(100),c(100),d(100)
+call SPLINE(n,x,y,b,c,d)
+npix=(n-1)*4+1
+step=0.25d0
+xx=x(1)-step
+az=0.d0
+bz=0.d0
+write(33,*)n,npix,xx
+do i=1,npix
+   xx=xx+step
+   ycn=SEVAL(n,xx,x,y,b,c,d)
+   az=az+xx*ycn
+   bz=bz+ycn
+write(34,*)xx,ycn
+enddo
+grav=az/bz
+end
+
+! Range correlation
+Real(8) function RangCorr(N,a,b)
+real(8) a(*),b(*)
+real(8) xsum, ysum, x2sum, y2sum
+real(8) xx, yy, xysum, xn, covar, varx, vary
+xsum = 0.d0
+ysum = 0.d0
+xysum = 0.d0
+x2sum = 0.d0
+y2sum = 0.d0
+do k = 1,N
+   xx = a(k)
+   yy = b(k)
+   xsum = xsum + xx
+   ysum = ysum + yy
+   xysum = xysum + xx * yy
+   x2sum = x2sum + xx * xx
+   y2sum = y2sum + yy * yy
+enddo
+xn = N + 1
+covar = xn * xysum - xsum * ysum
+varx = Sqrt(xn * x2sum - xsum * xsum)
+vary = Sqrt(xn * y2sum - ysum * ysum)
+RangCorr = covar / (varx * vary)
+end
